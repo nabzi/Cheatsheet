@@ -1,0 +1,122 @@
+package com.techran.wheelup.ui.home.adapter
+
+import android.annotation.SuppressLint
+import android.opengl.Visibility
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import androidx.databinding.DataBindingUtil
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
+import com.techran.wheelup.R
+import com.techran.wheelup.databinding.ItemHorizontalListBinding
+import com.techran.wheelup.databinding.ItemVerticalListBinding
+import com.techran.wheelup.model.Playlist
+import java.util.*
+
+
+typealias MyCallBack<T>  = (T)->Unit
+typealias MyCallBackUnit  = ()->Unit
+typealias MyCallBackStringPair  = (String , String? )->Unit
+
+data class VerticalItem(var title: String ,var id : String ,  var items : List<HorizontalListItem>)
+class VerticalAdapter( val onItemClick:MyCallBackStringPair?,
+                       val onShowAllClick : MyCallBackUnit? = null  ,
+                       val onTitleClick  : MyCallBack<Playlist>? = null ,val locale : Locale
+                       , val onDrag:((vm:RecyclerView.ViewHolder)->Unit)?=null
+) :
+    ListAdapter<VerticalItem, RecyclerView.ViewHolder>(
+        diffCallback
+    ) {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VerticalViewHolder =
+        VerticalViewHolder(
+            DataBindingUtil.inflate(
+                LayoutInflater.from(parent.context),
+                R.layout.item_vertical_list, parent, false
+            ), onItemClick , onShowAllClick, onDrag ,onTitleClick,locale
+        )
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        var item = getItem(position)
+        if (item != null) {
+            (holder as VerticalViewHolder).bindTo(item)
+        }
+    }
+
+    fun moveItem(from: Int, to: Int) {
+        notifyItemMoved(from,to)
+    }
+
+    companion object {
+        //This diff callback informs the PagedListAdapter how to compute list differences when new
+        private val diffCallback = object : DiffUtil.ItemCallback<VerticalItem>() {
+            override fun areItemsTheSame(
+                oldItem: VerticalItem,
+                newItem: VerticalItem
+            ): Boolean =
+                false
+
+            override fun areContentsTheSame(
+                oldItem: VerticalItem,
+                newItem: VerticalItem
+            ): Boolean =
+                false
+        }
+    }
+
+    class VerticalViewHolder(
+        val binding: ItemVerticalListBinding,
+        val onItemClick:MyCallBackStringPair?,
+        val onShowAllClick : MyCallBackUnit? = null  ,
+        val onDrag: ((vm: RecyclerView.ViewHolder) -> Unit)? = null  ,
+        val onTitleClick  : MyCallBack<Playlist>? = null,
+        locale: Locale
+    ) : RecyclerView.ViewHolder(binding.root) {
+        var item: VerticalItem? = null
+        var adapter  = HorizontalListAdapter(onItemClick , locale)
+        @SuppressLint("ClickableViewAccessibility")
+        fun bindTo(item: VerticalItem) {
+            this.item = item
+            with(binding) {
+                tvTitle.text = item.title
+
+                tvTitle.setOnClickListener {
+                    onTitleClick?.invoke(Playlist(item.id , item.title , null))
+                }
+                if (onShowAllClick == null)
+                    tvShowAll.visibility = View.GONE
+                tvShowAll.setOnClickListener {
+                    onShowAllClick?.invoke()
+                }
+                rvList.adapter = adapter
+                rvList.layoutManager = LinearLayoutManager(rvList.context , RecyclerView.HORIZONTAL,false)
+                adapter.submitList(item.items)
+
+                dragIndicator.apply {
+                    // Hide drag indicator when there is no drag handler attached to the adapter
+                    visibility = if (onDrag==null)
+                        View.GONE
+                    else
+                        View.VISIBLE
+
+                    setOnTouchListener {
+                            _, event ->
+                        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                            // 2. When we detect touch-down event, we call the
+                            //    startDragging(...) method we prepared above
+                            onDrag?.let { it(this@VerticalViewHolder) }
+                        }
+                        return@setOnTouchListener true
+                    }
+                }
+
+                executePendingBindings()
+            }
+        }
+    }
+
+
+}
