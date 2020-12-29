@@ -1,0 +1,130 @@
+package com.avan.dialog.ui.home.pages
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.widget.Button
+import android.widget.ProgressBar
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.OnLifecycleEvent
+import com.avan.dialog.R
+import com.avan.dialog.util.myLog
+import com.avan.dialog.util.myRedLog
+import kotlinx.coroutines.*
+import java.lang.Exception
+
+class AudioPlayManager(val coroutineScope: CoroutineScope) : LifecycleObserver {
+    private var mediaProgressBar: ProgressBar? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var playButton: Button? = null
+    private var context: Context? = null
+    fun setupPlayer(
+        url: String?,
+        progress: ProgressBar,
+        playButton: Button,
+        context: Context
+        //loading : (Boolean)->Unit
+    ) {
+        if (mediaPlayer != null && this.playButton != null && mediaPlayer!!.isPlaying) {
+            pause()
+            return
+        }
+        stopped = false
+        this.playButton = playButton
+        this.context = context
+
+        //  loading(true)
+
+        mediaProgressBar = progress
+        if (mediaPlayer == null) {
+            initPlayer()
+        }
+        play(url)
+        // loading(false)
+    }
+
+    private fun initPlayer() {
+        mediaPlayer = MediaPlayer().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+        }
+    }
+
+    private fun play(url: String?) {
+        playButton?.background =
+            context?.getDrawable(R.drawable.ic_baseline_pause_circle_filled_24)
+        // var url2 = "https://upload.wikimedia.org/wikipedia/commons/2/24/Sahan_Test_Audio.ogg"
+        playButton?.isEnabled = false
+        url?.let {
+            mediaPlayer?.apply {
+                try {
+                    reset()
+                    setDataSource(it)
+                    prepare() // might take long! (for buffering, etc)
+                    start()
+                    showProgress()
+                    playButton?.isEnabled = true
+                }catch (e : Exception){
+                    myRedLog(e.message)
+                }
+            }
+        }
+    }
+
+    private fun showProgress() {
+        mediaPlayer?.let { mp ->
+            val totalDuration = mp.duration
+            mediaProgressBar?.max = totalDuration
+            coroutineScope.launch(Dispatchers.Main) {
+                var sec = 0
+                while (sec < totalDuration) {
+                    if (stopped)
+                        return@launch
+                    try {
+                        sec = mp.currentPosition
+                        mediaProgressBar?.progress = sec
+                    } catch (e: Exception) {
+                        myRedLog(e.message)
+                    }
+                    delay(500)
+                }
+                pause()
+            }
+        }
+    }
+
+    var stopped = false
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    fun onFragmentPause() {
+        myLog("OnLifecycleEvent pause")
+        stopped = true
+        pause()
+
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+    fun onFragmentStop() {
+        myLog("OnLifecycleEvent stop")
+        releasePlayer()
+    }
+
+    fun pause() {
+        playButton?.background =
+            context?.getDrawable(R.drawable.ic_baseline_play_circle_filled_24)
+        mediaPlayer?.stop()
+        stopped = true
+        releasePlayer()
+        // initPlayer()
+    }
+
+    fun releasePlayer() {
+        mediaPlayer?.release()
+        mediaPlayer = null
+    }
+}
